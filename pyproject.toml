@@ -1,0 +1,83 @@
+[build-system]
+requires = ["setuptools>=61.0", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "google-ai-initialization"
+version = "2.0.0"
+description = "Autonomous Google AI, Vertex AI, and Model Context Protocol (MCP) Enterprise Workspace Provisioning Engine"
+readme = "README.md"
+authors = [
+    { name = "Project Maintainer", email = "maintainer@example.com" }
+]
+license = { text = "Apache-2.0" }
+requires-python = ">=3.10"
+classifiers = [
+    "Development Status :: 5 - Production/Stable",
+    "Intended Audience :: Developers",
+    "Intended Audience :: System Administrators",
+    "License :: OSI Approved :: Apache Software License",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.10",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Topic :: Software Development :: Build Tools",
+    "Topic :: Scientific/Engineering :: Artificial Intelligence",
+]
+dependencies = [
+    "google-genai>=0.1.1",
+    "playwright>=1.40.0",
+    "google-antigravity>=1.1.0",
+    "mcp>=1.0.0,<2.0.0",
+    "uv>=0.1.0",
+    "python-dotenv>=1.0.0",
+    "requests>=2.28.0",
+    "pyyaml>=6.0",
+    "packaging>=21.0"
+]
+
+[project.optional-dependencies]
+dev = [
+    "pytest>=7.4.0",
+    "pytest-cov>=4.1.0",
+    "ruff>=0.1.0",
+    "flake8>=6.0.0",
+    "mypy>=1.5.0",
+    "types-requests>=2.28.0",
+    "types-PyYAML>=6.0.0"
+]
+
+[project.scripts]
+google-ai-init = "initialize_google_ai:main"
+
+[project.urls]
+Homepage = "https://github.com/waynechen/google-ai-initialization"
+Documentation = "https://github.com/waynechen/google-ai-initialization#readme"
+Repository = "https://github.com/waynechen/google-ai-initialization.git"
+Issues = "https://github.com/waynechen/google-ai-initialization/issues"
+
+[tool.setuptools]
+py-modules = [
+    "initialize_google_ai",
+    "phase1_install",
+    "phase2_authenticate",
+    "phase3_provision",
+    "phase4_mcp_auto_discovery",
+    "agent_orchestrator",
+    "utils",
+    "canonical_bridges"
+]
+
+[tool.pytest.ini_options]
+minversion = "7.0"
+testpaths = ["tests"]
+python_files = ["test_*.py"]
+addopts = "-v --tb=short"
+
+[tool.ruff]
+line-length = 120
+target-version = "py310"
+
+[tool.ruff.lint]
+select = ["E", "F", "W", "B"]
+ignore = ["E501", "B008"]

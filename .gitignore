@@ -1,0 +1,68 @@
+# ==============================================================================
+# Git Ignore Configuration - Google AI Workspace & MCP Initializer
+# ==============================================================================
+
+# Byte-compiled / optimized / DLL files
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+
+# Distribution / packaging
+dist/
+build/
+*.egg-info/
+.eggs/
+
+# Unit test / coverage / tooling caches
+.pytest_cache/
+.ruff_cache/
+.mypy_cache/
+.coverage
+htmlcov/
+.tox/
+.nox/
+
+# Local developer configuration & credentials (CRITICAL SECURITY)
+.env
+.env.*
+!.env.example
+google_ai_env
+google_ai_env.*
+*.env
+.bashrc
+.profile
+
+# Local runtime execution logs
+*.log
+*.log.*
+google_ai_initialization.log
+gemini_history_*
+
+# Model Context Protocol local registries & caches
+.mcp.json
+.mcp.json.*
+!.mcp.json.example
+.mcp.json.temp
+
+# Node/NPM dependencies
+node_modules/
+package-lock.json
+
+# IDE and OS configurations
+.vscode/
+.idea/
+.DS_Store
+Thumbs.db
+
+# Scratch and temporary directories / files
+temp/
+service_enablement
+text
+1
+*.swp
+*.swo
+*~
+
+# Bridges directory generated at runtime
+bridges/
