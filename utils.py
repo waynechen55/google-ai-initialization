@@ -1685,7 +1685,7 @@ def perform_level3_functional_smoke_test(proc, tools) -> tuple:
                 return False, "Server crashed or closed stdout during dry-run."
             res = json.loads(res_line)
             if "error" in res:
-                return False, f"JSON-RPC error: {res["error"]}"
+                return False, f"JSON-RPC error: {res.get('error')}"
             if res.get("result", {}).get("isError"):
                 content = res["result"].get("content", [])
                 err_txt = content[0]["text"] if content else str(res)
@@ -1693,9 +1693,11 @@ def perform_level3_functional_smoke_test(proc, tools) -> tuple:
                 # Check for runtime/syntax crashes, but ignore clean 401/404 business logic rejections
                 if any(x in err_lower for x in ["nameerror", "syntaxerror", "typeerror", "traceback", "graphql", "internal server error", "500", "fetch failed", "exception", "not defined"]):
                     return False, f"Code crash detected: {err_txt}"
-            return True, f"Tool '{safe_tool["name"]}' executed functionally without crashing."
+            tool_name = safe_tool.get("name", "tool")
+            return True, f"Tool '{tool_name}' executed functionally without crashing."
         else:
-            return False, f"Timeout waiting for tool '{safe_tool["name"]}'."
+            tool_name = safe_tool.get("name", "tool")
+            return False, f"Timeout waiting for tool '{tool_name}'."
     except Exception as e:
         return False, f"Dry-run failed: {e}"
 
