@@ -32,7 +32,7 @@ This project delivers a **unified, multi-phase master orchestrator (`initialize_
 * **Strict, File-Driven Target-Key Assertion**:
   * Eradicates false-positive reports by implementing a strict, file-driven success validator. The orchestrator loads `.mcp.json` and asserts that **a unique key matching that specific target actually exists inside the file**. If the Agent fails to write the configuration to disk (either due to turn exhaustion or logic errors), the execution summary will **unconditionally mark it as `❌ FAILED`**, ensuring 100% visual and logical consistency.
 * **Strict Domain-Derived Unique Key Guardrails**:
-  * Commands the Agent via `CRITICAL 4` system instructions to **always generate unique, domain-derived registry key names** (such as `"bugzilla-suse-com"` and `"bugzilla-opensuse-org"`), completely preventing sequential batch targets from silently overwriting each other in `.mcp.json`!
+  * Commands the Agent via `CRITICAL 4` system instructions to **always generate unique, domain-derived registry key names** (such as `"bugzilla-example-com"` and `"bugzilla-example-org"`), completely preventing sequential batch targets from silently overwriting each other in `.mcp.json`!
 * **Strict Double-Handshake Schema Enforcement & Dependency Transparency**:
   * Prevents malformed community packages (such as versions of `@modelcontextprotocol/server-gitlab` omitting `type: "object"`) from being mistakenly approved. Both Agent and Procedural validators execute live `initialize` and `tools/list` handshakes, strictly rejecting any tool schema lacking `type: "object"`. In addition, custom Python bridge scripts are automatically inspected via `extract_script_dependencies()` to document external pip module requirements in `instructions`.
 * **Bidirectional Target Reconciliation Audit**:
@@ -40,11 +40,11 @@ This project delivers a **unified, multi-phase master orchestrator (`initialize_
 * **Two-Level Verification Standard (Process Health + Live Upstream Auth)**:
   * Eliminates false-positive "Connected" states where a local MCP process starts cleanly but remote API calls fail due to bad credentials. The validator conducts a strict Level 1 JSON-RPC stdio handshake (`initialize` + `tools/list`), followed by an active Level 2 non-blocking probe against the remote service endpoint (`verify_upstream_credentials()`). If the remote service returns HTTP 401/403, the tool immediately flags the credential rejection.
 * **Open Build Service (OBS / IBS) Authentication Architecture**:
-  * Open Build Service (`build.opensuse.org`, `build.suse.de`, `api.opensuse.org`, `api.suse.de`) strictly enforces **HTTP Basic Authentication** (`OBS_USER` and `OBS_PASSWORD`) or auto-discovery from `~/.config/osc/oscrc`. OBS does NOT support Bearer or Personal Access Tokens on its REST API; tokens issued in the OBS web UI under `/token` are strictly for automated webhook/service triggers.
+  * Open Build Service (`build.example.org`, `build.example.com`, `api.example.org`, `api.example.com`) strictly enforces **HTTP Basic Authentication** (`OBS_USER` and `OBS_PASSWORD`) or auto-discovery from `~/.config/osc/oscrc`. OBS does NOT support Bearer or Personal Access Tokens on its REST API; tokens issued in the OBS web UI under `/token` are strictly for automated webhook/service triggers.
 * **Unbuffered Stdio Pipeline & Timeout Protection (`sanitize_stdio_script_content()`)**:
   * Completely cures the Python stdio block-buffering deadlock (`MCP error 32001: request timed out`). Automatically intercepts and sanitizes any Python bridge script to enforce real-time line-by-line streaming (`sys.stdin.readline()`) and strict socket timeouts on outbound HTTP requests, preventing client connection hangs.
 * **Enterprise TLS & Corporate CA Resilience Architecture (`detect_system_ca_bundle()` & `probe_target_tls()`)**:
-  * Eliminates runtime `[SSL: CERTIFICATE_VERIFY_FAILED]` errors when MCP tools interact with internal corporate backends (such as `*.suse.de`, internal enterprise PKIs, or self-signed servers). Automatically discovers the host OS root CA bundle (`/etc/ssl/ca-bundle.pem`, `/etc/ssl/certs/ca-certificates.crt`) and injects concrete `SSL_CERT_FILE`, `REQUESTS_CA_BUNDLE`, and `NODE_EXTRA_CA_CERTS` paths without shell syntax traps. In addition, pre-flight upstream TLS probing actively diagnoses internal corporate certificates and auto-provisions `PYTHONHTTPSVERIFY=0` and `NODE_TLS_REJECT_UNAUTHORIZED=0`, while automatically synchronizing verified servers between workspace `.mcp.json` and user global `~/.gemini/settings.json`.
+  * Eliminates runtime `[SSL: CERTIFICATE_VERIFY_FAILED]` errors when MCP tools interact with internal corporate backends (such as `*.example.com`, internal enterprise PKIs, or self-signed servers). Automatically discovers the host OS root CA bundle (`/etc/ssl/ca-bundle.pem`, `/etc/ssl/certs/ca-certificates.crt`) and injects concrete `SSL_CERT_FILE`, `REQUESTS_CA_BUNDLE`, and `NODE_EXTRA_CA_CERTS` paths without shell syntax traps. In addition, pre-flight upstream TLS probing actively diagnoses internal corporate certificates and auto-provisions `PYTHONHTTPSVERIFY=0` and `NODE_TLS_REJECT_UNAUTHORIZED=0`, while automatically synchronizing verified servers between workspace `.mcp.json` and user global `~/.gemini/settings.json`.
 * **Zero-Blocking Credentials & Exploration-Driven URL Derivation**:
   * Eliminates interactive terminal stalling and repetitive prompts. Automatically derives URL, Base URL, Endpoint, and Host settings directly from target domains during procedural sourcing. If optional secrets or tokens are absent, they are cleanly populated with empty strings or non-blocking placeholders, enabling automated, headless, and containerized execution without manual intervention.
 * **Continuous Master Registry Accumulator & Shell Overwrite Guard**:
@@ -161,7 +161,7 @@ If GCloud tokens are completely missing, or if you run the script with **`--no-a
 ### 4.3. Enterprise Resilience & Route Cascading
 Custom bridges and auto-discovered configurations feature production-grade hardening:
 * **100% Headless Auto-Discovery**: All discovery paths run completely non-blocking without pausing on interactive stdin/keyboard prompts. If validation fails, errors and setup instructions are captured in the Consolidated Report without freezing automated pipelines.
-* **Universal Entity Key Normalization**: Full web URLs passed by developers are dynamically stripped down to their bare canonical keys or IDs (e.g. `https://sd.suse.com/.../SD-204666` ➔ `SD-204666`).
+* **Universal Entity Key Normalization**: Full web URLs passed by developers are dynamically stripped down to their bare canonical keys or IDs (e.g. `https://sd.example.com/.../SD-204666` ➔ `SD-204666`).
 * **Dynamic Credential Hot-Reloading**: Long-running MCP server subprocesses dynamically re-read refreshed tokens from live process environment, `settings.json`, `.mcp.json`, and `.env` per request without requiring process restart.
 * **Hierarchical Route Cascading**: In multi-tiered platforms (such as Jira Service Management), requests automatically cascade from Core REST APIs (`/rest/api/2/issue`) to Customer Portal APIs (`/rest/servicedeskapi/request`) upon hitting license or permission barriers (HTTP 500/401/403).
 * **Polymorphic Native Transport Support (`http`, `sse`, `stdio`)**: Natively supports and discovers both modern Streamable HTTP native endpoints (`type: "http"`, e.g. openQA), Server-Sent Events (`type: "sse"`), and local command-line processes (`stdio`), preserving maximum client portability.
@@ -169,7 +169,7 @@ Custom bridges and auto-discovered configurations feature production-grade harde
 * **Dual-Key Streamable HTTP Transport (`httpUrl` + `url`)**: Streamable HTTP endpoints dynamically populate both `httpUrl` (for Gemini CLI's `StreamableHTTPClientTransport`) and `url` (for SSE and general MCP clients), guaranteeing 100% protocol compliance and immediate connection status across all editors.
 * **First-Class Keyless Vertex AI ADC Recognition (`is_agent_ready_to_run`)**: Evaluates Agent Mode readiness across all supported authentication channels (Keyless `~/.config/gcloud/application_default_credentials.json`, `GOOGLE_APPLICATION_CREDENTIALS`, Key-based `GEMINI_API_KEY`, and active GCloud CLI login). Keyless Vertex AI setups are recognized instantly as first-class citizens, completely eliminating accidental fallbacks to standard procedural mode on machines authenticated without an explicit API key.
 * **Dynamic GCloud SDK Executable Resolution (`resolve_gcloud_bin`)**: Dynamically resolves the active `gcloud` binary across environment variables, standard PATH, and common standalone installations (`/root/google-cloud-sdk/bin/gcloud`, `~/google-cloud-sdk/bin/gcloud`, Homebrew, `/opt/google-cloud-sdk/bin`). Guarantees that authentication and project checks succeed even when `gcloud` is not in standard `/usr/bin/PATH`.
-* **Automatic Enterprise TLS Certificate Injection (`NODE_EXTRA_CA_CERTS`)**: Host operating system CA bundles (`/etc/ssl/ca-bundle.pem`, etc.) are automatically detected and exported across `~/.bashrc`, `~/.profile`, `/etc/profile.d/node_extra_ca_certs.sh`, `.env`, and `~/.gemini/.env`. This ensures Node.js runtimes and Gemini CLI natively trust internal enterprise corporate certificates (`*.suse.de`) without `UNABLE_TO_GET_ISSUER_CERT_LOCALLY` errors.
+* **Automatic Enterprise TLS Certificate Injection (`NODE_EXTRA_CA_CERTS`)**: Host operating system CA bundles (`/etc/ssl/ca-bundle.pem`, etc.) are automatically detected and exported across `~/.bashrc`, `~/.profile`, `/etc/profile.d/node_extra_ca_certs.sh`, `.env`, and `~/.gemini/.env`. This ensures Node.js runtimes and Gemini CLI natively trust internal enterprise corporate certificates (`*.example.com`) without `UNABLE_TO_GET_ISSUER_CERT_LOCALLY` errors.
 * **Strict Clean Settings Invariant (No Metadata Infiltration)**: Configuration registries (`.mcp.json` and `~/.gemini/settings.json`) strictly enforce pure JSON-RPC 2.0 schemas. Instructional metadata, commentary, and setup guidance are logged to console banners and file logs only, and are strictly prohibited from infiltrating server definition blocks.
 * **Challenge-Aware Native Probing & In-Flight Authentication**: Detects HTTP 401/403 responses accompanied by JSON error payloads or `WWW-Authenticate` headers as live authenticated native MCP servers rather than missing endpoints. Automatically auto-injects in-flight credentials (such as `OPENQA_API_KEY`, `OPENQA_API_SECRET`, Bearer tokens) to validate native authentication directly on Tier 1.
 * **Deferred-Authentication Tolerance for Token-Gated Native Endpoints**: Accurately identifies token-gated Native HTTP endpoints (e.g. openQA returning HTTP 403 `no api key`). In headless automated environments before credentials are configured in `.env`, the endpoint and protocol are confirmed active (`[DEFERRED AUTHENTICATION]`), preserving the native configuration in `.mcp.json` without failing the handshake or causing the Agent to panic and cascade to local bridges.
@@ -180,7 +180,7 @@ Custom bridges and auto-discovered configurations feature production-grade harde
 * **Mandatory Turn-1 Fast Native Probing (Tier 1 Precedence)**: The Autonomous Agent is strictly mandated to execute native endpoint probing first for 100% of targets on Turn 1 using a single batch `curl` command. Repetitive single-path `curl` sweeps across separate conversational turns are strictly prohibited, preserving turn budgets and eliminating Vertex AI 429 quota limits while guaranteeing that any native MCP server upstream is prioritized.
 * **Symmetrical Deterministic Python Tools**: Replaces error-prone LLM shell scripting (`curl`, `npm view`, `cat`) with 4 high-speed deterministic Python tools available to the Agent: `probe_native_remote_endpoint_tool` (concurrent HTTP/SSE probing in <1.5s), `search_package_registries_tool` (dual npm+PyPI JSON querying in 50ms), `list_local_bridges_tool` (AST-based environment introspection in 5ms), and `generate_mcp_bridge_template_tool` (zero-dependency scaffolding). These guarantee 100% deterministic I/O across Agent and Traditional modes without wasting context tokens or triggering Vertex AI 429 quota exhaustion.
 * **Monotonic Tiered Candidate Scoring (Native = Score 100)**: In procedural mode, native endpoints hold absolute top priority (`score: 100`), ensuring they are always Candidate 1 over local bridges (scores 20-39) and official packages (score 50), with all candidates sorted descending to preserve strict discovery tiers.
-* **FQDN Domain-Aware Mapping in High-Signal Knowledge Base**: Exact corporate domains (`build.opensuse.org`, `build.suse.de`, `progress.opensuse.org`, `smelt.suse.de`, `sd.suse.com`) are mapped explicitly in `COMMON_MCP_SERVERS`, enabling agents to recognize and configure canonical bridges on Turn 2 if native probing proves negative.
+* **FQDN Domain-Aware Mapping in High-Signal Knowledge Base**: Exact corporate domains (`build.example.org`, `build.example.com`, `progress.example.org`, `smelt.example.com`, `sd.example.com`) are mapped explicitly in `COMMON_MCP_SERVERS`, enabling agents to recognize and configure canonical bridges on Turn 2 if native probing proves negative.
 * **Mandatory Physical Disk Verification for Agent Success**: Eliminates false-positive reports by strictly validating that discovered servers are physically present in `.mcp.json` before accepting any claim of success, preventing discrepancies between discovery summaries and final reconciliation audits.
 * **Dynamic Per-Attempt Configuration & Thinking Mode Isolation**: Dynamically reconstructs `attempt_config` inside the retry loop for each attempt, guaranteeing that fallback models (`gemini-2.5-flash`) enforce `thinking_budget=0`, preventing thinking token accumulation and 429 quota exhaustion.
 * **Forced Function-Calling Mode (`mode="ANY"`) on Multi-Turn Follow-Ups**: When an agent model emits conversational planning text rather than tool calls, follow-up turns are sent with forced function-calling configuration (`mode="ANY"`), physically compelling the model to return a structured tool call (`write_mcp_settings_tool` or `verify_mcp_connection_tool`) rather than conversational text.
@@ -193,7 +193,7 @@ Custom bridges and auto-discovered configurations feature production-grade harde
 * **Non-Blocking Resilient Pre-Flight DNS**: Resolves DNS lookups with non-blocking resilience across both Agent and Procedural modes, logging informative warnings on corporate proxy resolver delays rather than aborting discovery runs.
 * **Strict Anti-LSP Guardrails & Exact MCP Stdio Specification (CRITICAL 13)**: The agent prompt explicitly defines the standard JSON-RPC 2.0 schemas for MCP (`initialize`, silent notifications, `tools/list`, and `tools/call` Object envelope) and strictly forbids Language Server Protocol (LSP) boilerplate (`textDocumentSync`, `completionProvider`). In addition, `write_local_file_tool` automatically intercepts and rejects any file writes containing LSP code before they can touch the disk.
 * **Indestructible Embedded Canonical Bridge Registry & Thread Mutex**: `utils.py` enforces thread-safe I/O via `bridge_io_lock`, detects and purges corrupted LSP scripts, and synthesizes or restores canonical bridges automatically without depending on fragile cross-machine directory trees.
-* **Dual-Directory Local Bridge Search & Enterprise Cascading**: `discover_all_mcp_candidates` evaluates both `bridges/` and `WORKSPACE_ROOT`, cascading Jira Service Management (`sd.suse.com`) to official `uvx mcp-atlassian` packages and OBS targets to canonical OBS bridge runners.
+* **Dual-Directory Local Bridge Search & Enterprise Cascading**: `discover_all_mcp_candidates` evaluates both `bridges/` and `WORKSPACE_ROOT`, cascading Jira Service Management (`sd.example.com`) to official `uvx mcp-atlassian` packages and OBS targets to canonical OBS bridge runners.
 * **Strict JSON-RPC Request ID Correlation**: Handshake validation (`validate_mcp_connection` & `verify_mcp_connection_tool`) correlates JSON-RPC responses directly by matching request IDs (`id: 2`), safely skipping unhandled notification errors (`notifications/initialized`) and noise messages emitted by minimal or standard JSON-RPC bridges.
 * **Autonomous Headless Credential Provisioning (CRITICAL 12)**: The Autonomous Agent's core mandate strictly prohibits halting to prompt users for API tokens or passwords in conversational text. It immediately writes standard configurations with placeholder credentials (`""`, `"<REQUIRED_TOKEN>"`), documents setup instructions, and completes connection testing.
 * **Strict Orchestrator Script Exclusion in Bridge Healing**: `ensure_bridges_directory_intact` explicitly excludes pipeline and runner scripts (`phase4_mcp_auto_discovery.py`, `agent_orchestrator.py`, etc.) from being copied into `bridges/`, preventing core pipeline scripts from being misidentified as local bridges.
@@ -204,8 +204,8 @@ Custom bridges and auto-discovered configurations feature production-grade harde
 * **Multi-Candidate Cascading Discovery**: Default procedural mode exhaustively evaluates all candidate tiers (Fingerprints, Local Bridges, Standard Packages, OpenAPI specs, and AI generators) in priority order, automatically cascading to subsequent candidates if an earlier candidate fails connection validation.
 * **Deferred-Tool Token Verification**: Validates token-gated servers (such as `uvx mcp-atlassian` for Jira and Confluence) when they successfully initialize via standard JSON-RPC, gracefully recognizing that dynamic tool populations will activate once authentication credentials are provided in `.env`.
 * **Thread-Isolated Target Hinting**: Uses a thread-local (`threading.local`) context for target hints during concurrent Agent discovery, preventing race conditions where parallel threads could overwrite each other's domain context.
-* **Domain-Scoped Credential Isolation**: Independent subdomains (such as `jira.suse.com` and `sd.suse.com`) are treated as separate authentication realms, preventing token cross-pollution.
-* **Zero-Dependency Redmine & Issue Tracker Bridges**: Custom local standard-library bridge (`bridges/redmine_mcp_server.py`) for Redmine instances (such as `progress.opensuse.org`), eliminating reliance on external npm packages and providing 100% immunity to npm registry timeouts (`ETIMEDOUT`) behind firewalls.
+* **Domain-Scoped Credential Isolation**: Independent subdomains (such as `jira.example.com` and `sd.example.com`) are treated as separate authentication realms, preventing token cross-pollution.
+* **Zero-Dependency Redmine & Issue Tracker Bridges**: Custom local standard-library bridge (`bridges/redmine_mcp_server.py`) for Redmine instances (such as `progress.example.org`), eliminating reliance on external npm packages and providing 100% immunity to npm registry timeouts (`ETIMEDOUT`) behind firewalls.
 * **Bulletproof Agent Session Self-Healing**: Transient API network glitches (e.g. `Server disconnected without sending a response`, connection resets, HTTP 5xx/429) automatically trigger session-level recovery with exponential backoff and .mcp.json state preservation instead of abandoning the agent loop.
 * **Pre-Flight DNS Fast-Fail**: Validates target hostnames via non-blocking socket lookups in < 0.1s, immediately rejecting mistyped or unreachable domains before wasting turn budgets.
 * **Concurrency Watchdog & Socket Timeout Protection**: Sets explicit 120s socket timeouts in `HttpOptions` and wraps thread pools in an adaptive deadline watchdog, preventing threads from hanging permanently on silent socket drops.
@@ -217,14 +217,14 @@ Custom bridges and auto-discovered configurations feature production-grade harde
 * **Concurrency-Aware Rate Limiting with Jitter Backoff & Supported Model Pinning**: In multi-threaded concurrent execution (`--concurrency`), parallel agent threads apply randomized exponential jitter backoff on `429 RESOURCE_EXHAUSTED` rate limits. Fallback models on Vertex AI `global` are pinned strictly to active publisher models (`gemini-3.7-flash`, `gemini-2.5-flash`), eliminating fatal `404 NOT_FOUND` crashes on unsupported models like `gemini-2.0-flash`.
 * **Strictly Scoped Procedural Fallback**: When Agent Mode completes with partial target failures, procedural recovery executes *only* on the failed subset (`failed_targets`). Targets that already succeeded in Agent Mode are fully preserved in `.mcp.json` and are never re-evaluated or overwritten.
 * **Thread-Safe Master Registry Synchronization**: All reads, merges, and writes in `sync_master_mcp_registry` are protected by `mcp_write_lock`, preventing race conditions and lost server entries when worker threads finish concurrently.
-* **Specificity-Guarded Bridge Scoring**: Local bridge discovery requires a service-identifying keyword match (`gitlab`, `openqa`, `bugzilla`, `obs`, `build`, etc.) before awarding match points. Generic domain tokens (`suse`, `opensuse`, `org`, `com`, `de`) only grant secondary bonus points, preventing unrelated services (such as `confluence.suse.com`) from being hijacked by openQA or other bridges.
-* **Universal Open Build Service (OBS) Bridge Server**: `bridges/obs_mcp_server.py` serves as a canonical wrapper that dynamically delegates to `build_opensuse_mcp.py` based on `OBS_BASE_URL`, guaranteeing valid physical script resolution for both `build.opensuse.org` and `build.suse.de`.
+* **Specificity-Guarded Bridge Scoring**: Local bridge discovery requires a service-identifying keyword match (`gitlab`, `openqa`, `bugzilla`, `obs`, `build`, etc.) before awarding match points. Generic domain tokens (`corp`, `internal`, `org`, `com`, `de`) only grant secondary bonus points, preventing unrelated services (such as `confluence.example.com`) from being hijacked by openQA or other bridges.
+* **Universal Open Build Service (OBS) Bridge Server**: `bridges/obs_mcp_server.py` serves as a canonical wrapper that dynamically delegates to `build_opensuse_mcp.py` based on `OBS_BASE_URL`, guaranteeing valid physical script resolution for both `build.example.org` and `build.example.com`.
 * **Dynamic 429 Quota Failover**: When API rate limits (`429 RESOURCE_EXHAUSTED`) occur on the primary model tier (`gemini-3.7-flash`), the agent session self-healing automatically adapts the active session model to high-capacity tiers (`gemini-2.5-flash` or `gemini-1.5-flash`), preventing exhausted quota limits from aborting agent mode.
 * **Resilient Non-Blocking DNS Pre-Flight**: Pre-flight DNS verification employs an 8.0-second timeout with automatic retries and logs non-fatal warnings rather than fatally terminating agent discovery on transient resolver latency.
 * **Turn-Budget Subprocess Protection**: Blocks multi-minute test runner invocations (`run_tests.py`) inside discovery shell commands, preventing 180s command timeouts and preserving turn budgets for MCP configuration.
-* **Deep Smoke Test Timeout Resilience**: Level 3 Functional Smoke Testing uses a 15.0-second timeout to accommodate corporate proxy and enterprise network latency (such as `build.suse.de`).
+* **Deep Smoke Test Timeout Resilience**: Level 3 Functional Smoke Testing uses a 15.0-second timeout to accommodate corporate proxy and enterprise network latency (such as `build.example.com`).
 * **Commit-on-Success MCP Registration**: Discovery flows across both Agent and Traditional modes validate server connectivity and tool double-handshaking *before* committing configurations to `.mcp.json` or `/root/.gemini/settings.json`. Failed connection attempts or speculative guesses are never written to disk, preventing dummy or broken entries (such as `example-com`) from cluttering user registries.
-* **Native Zero-Dependency Bugzilla MCP Bridge**: Dedicated standard-library bridge (`bridges/bugzilla_mcp_server.py`) for SUSE and openSUSE Bugzilla instances (`bugzilla.suse.com`, `bugzilla.opensuse.org`), eliminating external npm dependencies and wrapping all list responses (`search_bugs`, `get_products`, `get_comments`, `get_attachments`) in semantic Record dictionaries (`{"count": len(...), "...": [...]}`) for 100% Valibot schema conformance.
+* **Native Zero-Dependency Bugzilla MCP Bridge**: Dedicated standard-library bridge (`bridges/bugzilla_mcp_server.py`) for enterprise and community Bugzilla instances (`bugzilla.example.com`, `bugzilla.example.org`), eliminating external npm dependencies and wrapping all list responses (`search_bugs`, `get_products`, `get_comments`, `get_attachments`) in semantic Record dictionaries (`{"count": len(...), "...": [...]}`) for 100% Valibot schema conformance.
 * **Ground-Truth Credential Verification**: Authentication flows decouple token exchange from optional quota checks by passing `--disable-quota-project` and inspecting `application_default_credentials.json` directly. If valid tokens exist on disk or in the active profile, Phase 2 succeeds even if upstream CLI warnings or disabled APIs in legacy projects produce non-zero exit codes.
 * **Enterprise Vertex AI ADC Routing, Millisecond Timeouts & Scored Bridges**: Keyless agent initialization explicitly targets Vertex AI (`vertexai=True`, `GOOGLE_GENAI_USE_ENTERPRISE="True"`) with designated project and location scopes, isolating from all lingering API keys (`GEMINI_API_KEY` and `GOOGLE_API_KEY`). Socket timeouts in `google-genai` SDK are enforced in milliseconds (`120_000.0` for 120s), eliminating sub-second timeout traps. Verification pings employ adaptive model fallbacks (`[target_model, "gemini-2.5-flash", "gemini-2.0-flash", "gemini-1.5-flash"]`), and DNS checks run in private thread pools without mutating global socket defaults. Subprocesses enforce working directory anchoring (`cwd=WORKSPACE_ROOT`), merge configuration environments (`config['env']`), and employ tokenized scored matching across local bridges.
 * **Vertex AI Tool Exclusivity & Physical File Existence Guard**:
@@ -250,7 +250,7 @@ To prevent partial writes, corrupted configuration files, or hanging compilers d
 | `--use-enterprise` | `str` | `True` | Forces the Google GenAI SDK to route requests through your Vertex AI project quota. |
 | `--genai-model` | `str` | `gemini-3.7-flash` | The specific Gemini model targeting verification checks and the Setup Agent. |
 | `--env-file` | `str` | `.env` | Path to load and persist configurations/credentials. |
-| `--mcp-server` | `str` | `bugzilla.suse.com` | Comma-separated list of websites/databases to discover sequentially in Phase 4. |
+| `--mcp-server` | `str` | `bugzilla.example.com` | Comma-separated list of websites/databases to discover sequentially in Phase 4. |
 | `--phases` | `str` | `1,2,3,4` | Comma-separated phase numbers to schedule (e.g. `3,4` to configure and discover). |
 | `--no-automatic-browser`, `--headless` | `flag` | `False` | Bypasses Playwright headed browser launches entirely to prevent display hangs in headless SSH sessions, providing direct manual copy-paste URLs. |
 | `--no-allow-service-disabled` | `flag` | `False` | Forces Strict API Mode: Aborts Phase 3 immediately if GCloud API enablement or verification fails. |
@@ -280,7 +280,7 @@ python3 /path/to/google-ai-initialization/initialize_google_ai.py \
   --env-file "/path/to/.env" \
   --force-install \
   --force-auth \
-  --mcp-server "srv1.corp.com,srv2.corp.us,srv3.google.com" \
+  --mcp-server "srv1.example.com,srv2.example.com,srv3.example.com" \
   --agent-max-turns 15 \
   --concurrency 4
 ```
@@ -293,7 +293,7 @@ python3 /path/to/google-ai-initialization/initialize_google_ai.py \
 * **`--env-file "/path/to/.env"`**: Specifies the explicit filesystem path to your local environment file. Discovered credentials, active project IDs, and detected TLS certificate paths are read from and securely persisted here.
 * **`--force-install`**: Forces a fresh verification and re-installation of required Python packages (`google-genai`, `playwright`, `mcp`), host utilities, and Playwright Chromium drivers (Phase 1).
 * **`--force-auth`**: Forces clean re-authentication for Google Cloud standard login and Application Default Credentials (ADC), refreshing stale or expired OAuth sessions (Phase 2).
-* **`--mcp-server "srv1.corp.com,srv2.corp.us,srv3.google.com"`**: Comma-separated list of target servers/services to auto-discover, synthesize bridges for, and register into `.mcp.json`.
+* **`--mcp-server "srv1.example.com,srv2.example.com,srv3.example.com"`**: Comma-separated list of target servers/services to auto-discover, synthesize bridges for, and register into `.mcp.json`.
 * **`--agent-max-turns 15`**: *(Optional)* Maximum reasoning/action ReAct decision loops allocated per target server for the Autonomous AI Agent. Default is 15 turns.
 * **`--concurrency 4`**: *(Optional)* Number of parallel worker threads used during Phase 4 multi-server discovery, with atomic log grouping to prevent output interleaving.
 
@@ -316,11 +316,11 @@ gemini
 ---
 
 ### Scenario B: The Complete Enterprise Engineering Suite (All 14 Servers)
-Bootstrap a full developer workspace targeting all SUSE, openSUSE, and Google developer platforms:
+Bootstrap a full developer workspace targeting enterprise and community developer platforms:
 ```bash
 python3 initialize_google_ai.py \
   --gcloud-project "your-gcp-project-id" \
-  --mcp-server "github.com,gitlab.suse.de,openqa.suse.de,openqa.opensuse.org,bugzilla.suse.com,bugzilla.opensuse.org,confluence.suse.com,jira.suse.com,sd.suse.com,smelt.suse.de,build.suse.de,build.opensuse.org,progress.opensuse.org,developers.google.com/knowledge/api"
+  --mcp-server "github.com,gitlab.example.com,openqa.example.com,openqa.example.org,bugzilla.example.com,bugzilla.example.org,confluence.example.com,jira.example.com,sd.example.com,smelt.example.com,build.example.com,build.example.org,progress.example.org,knowledge.example.com/api"
 ```
 
 ### Scenario C: High-Speed Concurrent Discovery (Multi-Worker Execution)
@@ -329,7 +329,7 @@ Accelerate multi-server discovery across parallel worker threads with atomic log
 python3 initialize_google_ai.py \
   --phases 4 \
   --concurrency 4 \
-  --mcp-server "build.suse.de,build.opensuse.org,jira.suse.com,confluence.suse.com,sd.suse.com"
+  --mcp-server "build.example.com,build.example.org,jira.example.com,confluence.example.com,sd.example.com"
 ```
 
 ### Scenario D: Standalone MCP Discovery (Phase 4 Only)
@@ -337,7 +337,7 @@ When Python packages and Google Cloud ADC are already initialized on the host, s
 ```bash
 python3 initialize_google_ai.py \
   --phases 4 \
-  --mcp-server "jira.suse.com,confluence.suse.com"
+  --mcp-server "jira.example.com,confluence.example.com"
 ```
 
 ### Scenario E: Quiet Headless VM / Docker Setup (No Browser)
@@ -346,7 +346,7 @@ For remote SSH sessions, container builds, or cloud VMs without an X11/Wayland d
 python3 initialize_google_ai.py \
   --phases 3,4 \
   --gcloud-project "your-gcp-project-id" \
-  --mcp-server "github.com,gitlab.suse.de" \
+  --mcp-server "github.com,gitlab.example.com" \
   --no-automatic-browser
 ```
 
@@ -356,7 +356,7 @@ Direct the AI agent to evaluate all candidates (native, official package, local 
 python3 initialize_google_ai.py \
   --phases 4 \
   --the-best-mcp \
-  --mcp-server "jira.suse.com,sd.suse.com"
+  --mcp-server "jira.example.com,sd.example.com"
 ```
 
 ### Scenario G: Multi-Variant Comprehensive Registration (`--exhaustive-mcp`)
@@ -365,7 +365,7 @@ Direct the engine to discover and register all working candidates side-by-side u
 python3 initialize_google_ai.py \
   --phases 4 \
   --exhaustive-mcp \
-  --mcp-server "openqa.opensuse.org,jira.suse.com"
+  --mcp-server "openqa.example.org,jira.example.com"
 ```
 
 ### Scenario H: Corporate VPN / High-Latency Network Tuning
@@ -374,7 +374,7 @@ Scale socket and subprocess timeouts when operating over corporate VPNs or slow 
 python3 initialize_google_ai.py \
   --timeout 300 \
   --timeout-scale 1.5 \
-  --mcp-server "build.suse.de,smelt.suse.de"
+  --mcp-server "build.example.com,smelt.example.com"
 ```
 
 ### Scenario I: Verbose Debugging & Custom File Logging
@@ -383,16 +383,16 @@ Stream low-level protocol diagnostics to console and capture complete logs to a 
 python3 initialize_google_ai.py \
   --log-level debug \
   --log-file /tmp/mcp_discovery_debug.log \
-  --mcp-server "progress.opensuse.org"
+  --mcp-server "progress.example.org"
 ```
 
-### Scenario H: Traditional 100% Offline Procedural Mode (Bypassing AI)
+### Scenario J: Traditional 100% Offline Procedural Mode (Bypassing AI)
 Run discovery without making any remote inference calls to Google Cloud Vertex AI, utilizing purely local Python AST scans and cached packages:
 ```bash
 python3 initialize_google_ai.py \
   --phases 4 \
   --no-agent \
-  --mcp-server "build.opensuse.org,bugzilla.opensuse.org"
+  --mcp-server "build.example.org,bugzilla.example.org"
 ```
 
 ### Scenario I: Safe Dry-Run Simulation (Preview Without Making Changes)
@@ -469,20 +469,20 @@ The orchestrator includes out-of-the-box discovery and automated bridge synthesi
 
 | Service | Target Domain | Canonical Key | Default Protocol | Required Credentials / Tokens |
 |:---|:---|:---|:---:|:---|
-| **Google Developer Knowledge** | `developers.google.com/knowledge/api` | `developers-google-com` | `stdio` (Python Bridge) | `GEMINI_API_KEY` |
+| **Developer Knowledge Base** | `knowledge.example.com/api` | `knowledge-example-com` | `stdio` (Python Bridge) | `GEMINI_API_KEY` |
 | **GitHub** | `github.com` | `github-com` | `stdio` (`npx`) | `GITHUB_PERSONAL_ACCESS_TOKEN` |
-| **GitLab SUSE** | `gitlab.suse.de` | `gitlab-suse-de` | `stdio` (Python Bridge) | `GITLAB_SUSE_PAT` |
-| **openQA Enterprise** | `openqa.suse.de` | `openqa-suse-de` | `stdio` (Bridge) / `http` | `OPENQA_SUSE_DE_API_KEY`, `OPENQA_SUSE_DE_API_SECRET` |
-| **openQA Community** | `openqa.opensuse.org` | `openqa-opensuse-org` | `http` (Native Streamable) | `OPENQA_OPENSUSE_ORG_API_KEY`, `OPENQA_OPENSUSE_ORG_API_SECRET` |
-| **Bugzilla SUSE** | `bugzilla.suse.com` | `bugzilla-suse-com` | `stdio` (Python Bridge) | `BUGZILLA_SUSE_API_KEY` |
-| **Bugzilla openSUSE** | `bugzilla.opensuse.org` | `bugzilla-opensuse-org` | `stdio` (Python Bridge) | `BUGZILLA_OPENSUSE_API_KEY` |
-| **Confluence SUSE** | `confluence.suse.com` | `confluence-suse-com` | `stdio` (`uvx`) | `CONFLUENCE_SUSE_PAT` |
-| **Jira SUSE** | `jira.suse.com` | `jira-suse-com` | `stdio` (Python Bridge) | `JIRA_SUSE_PAT` |
-| **Service Desk SUSE** | `sd.suse.com` | `sd-suse-com` | `stdio` (Python Bridge) | `SD_SUSE_PAT` |
-| **SMELT Maintenance** | `smelt.suse.de` | `smelt-suse-de` | `stdio` (Python Bridge) | None (Public read) |
-| **Open Build Service SUSE** | `build.suse.de` | `build-suse-de` | `stdio` (Python Bridge) | `OBS_SUSE_USER`, `OBS_SUSE_PASSWORD` |
-| **Open Build Service openSUSE**| `build.opensuse.org` | `build-opensuse-org` | `stdio` (Python Bridge) | `OBS_OPENSUSE_USER`, `OBS_OPENSUSE_PASSWORD` |
-| **Redmine / Progress** | `progress.opensuse.org` | `progress-opensuse-org` | `stdio` (Python Bridge) | `REDMINE_OPENSUSE_API_KEY` |
+| **GitLab Enterprise** | `gitlab.example.com` | `gitlab-example-com` | `stdio` (Python Bridge) | `GITLAB_PAT` |
+| **openQA Enterprise** | `openqa.example.com` | `openqa-example-com` | `stdio` (Bridge) / `http` | `OPENQA_API_KEY`, `OPENQA_API_SECRET` |
+| **openQA Community** | `openqa.example.org` | `openqa-example-org` | `http` (Native Streamable) | `OPENQA_API_KEY`, `OPENQA_API_SECRET` |
+| **Bugzilla Enterprise** | `bugzilla.example.com` | `bugzilla-example-com` | `stdio` (Python Bridge) | `BUGZILLA_API_KEY` |
+| **Bugzilla Community** | `bugzilla.example.org` | `bugzilla-example-org` | `stdio` (Python Bridge) | `BUGZILLA_API_KEY` |
+| **Confluence Enterprise** | `confluence.example.com` | `confluence-example-com` | `stdio` (`uvx`) | `CONFLUENCE_PAT` |
+| **Jira Enterprise** | `jira.example.com` | `jira-example-com` | `stdio` (Python Bridge) | `JIRA_PAT` |
+| **Service Desk Enterprise** | `sd.example.com` | `sd-example-com` | `stdio` (Python Bridge) | `SD_PAT` |
+| **SMELT Maintenance** | `smelt.example.com` | `smelt-example-com` | `stdio` (Python Bridge) | None (Public read) |
+| **Open Build Service Enterprise** | `build.example.com` | `build-example-com` | `stdio` (Python Bridge) | `OBS_USER`, `OBS_PASSWORD` |
+| **Open Build Service Community** | `build.example.org` | `build-example-org` | `stdio` (Python Bridge) | `OBS_USER`, `OBS_PASSWORD` |
+| **Redmine / Issue Tracker** | `progress.example.org` | `progress-example-org` | `stdio` (Python Bridge) | `REDMINE_API_KEY` |
 
 ---
 
