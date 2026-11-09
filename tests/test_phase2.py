@@ -136,6 +136,7 @@ class TestPhase2(unittest.TestCase):
 
     @patch("phase2_authenticate.playwright_login", return_value="test-code")
     @patch("subprocess.Popen")
+    @patch.dict(os.environ, {"DRY_RUN_MODE": "0"})
     def test_orchestrate_gcloud_strips_ansi_from_url(self, mock_popen, mock_login):
         """orchestrate_gcloud_headless_flow must strip ANSI escape codes and trailing characters from OAuth URL."""
         mock_proc = MagicMock()
@@ -170,6 +171,7 @@ class TestPhase2(unittest.TestCase):
 
 
 
+    @patch.dict(os.environ, {"DRY_RUN_MODE": "0"})
     def test_synchronize_gemini_cli_auth_oauth(self):
         """synchronize_gemini_cli_auth must persist oauth-personal into settings.json."""
         import tempfile, json, os, shutil
@@ -188,6 +190,7 @@ class TestPhase2(unittest.TestCase):
                     data = json.load(f)
                 self.assertEqual(data["security"]["auth"]["selectedType"], "oauth-personal")
 
+    @patch.dict(os.environ, {"DRY_RUN_MODE": "0"})
     def test_synchronize_gemini_cli_auth_api_key(self):
         """synchronize_gemini_cli_auth must persist gemini-api-key and write to global .env."""
         import tempfile, json, os
@@ -214,6 +217,7 @@ class TestPhase2(unittest.TestCase):
                     env_content = f.read()
                 self.assertIn("GEMINI_API_KEY=AIzaSyTestKey123", env_content)
 
+    @patch.dict(os.environ, {"DRY_RUN_MODE": "0"})
     def test_synchronize_gemini_cli_auth_service_account(self):
         """synchronize_gemini_cli_auth must map key file to standard ADC location."""
         import tempfile, json, os

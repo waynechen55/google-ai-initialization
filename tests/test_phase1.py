@@ -15,6 +15,7 @@ import phase1_install
 class TestPhase1(unittest.TestCase):
     """Tests for phase1_install.py installer logic."""
 
+    @patch.dict(os.environ, {"DRY_RUN_MODE": "0"})
     def test_setup_gemini_workspace(self):
         """Should create .gemini/ directory and correctly symlink agents and skills."""
         with tempfile.TemporaryDirectory() as tmpdir:
@@ -76,6 +77,7 @@ class TestPhase1(unittest.TestCase):
         for pkg in expected:
             self.assertIn(pkg, phase1_install.REQUIRED_PIP_PACKAGES, f"Missing {pkg} in REQUIRED_PIP_PACKAGES")
 
+    @patch.dict(os.environ, {"DRY_RUN_MODE": "0"})
     @patch("phase1_install.run_command", return_value=0)
     @patch("phase1_install.check_system_browsers")
     def test_install_playwright_browsers_with_deps(self, mock_browsers, mock_run):

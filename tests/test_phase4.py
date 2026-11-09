@@ -27,6 +27,8 @@ class TestPhase4(unittest.TestCase):
         os.environ.clear()
         os.environ.update(self.original_env)
 
+    @patch("os.path.expanduser", new=lambda path: path)
+    @patch.dict(os.environ, {"DRY_RUN_MODE": "0"})
     def test_write_mcp_settings_sanitizes_instructions(self):
         """Writing settings should persist command, args, env, but strictly omit instructions to maintain standard MCP compliance."""
         with tempfile.TemporaryDirectory() as tmpdir:
@@ -191,14 +193,33 @@ class TestPhase4(unittest.TestCase):
 
     def test_gitlab_mcp_server_record_envelope(self):
         """bridges/gitlab_mcp_server.py list tools must wrap bare arrays into Record envelopes."""
-        import subprocess, json
-        
+        import subprocess, json, threading
+        from http.server import BaseHTTPRequestHandler, HTTPServer
+
+        class GitLabApiHandler(BaseHTTPRequestHandler):
+            def do_GET(self):
+                body = json.dumps([{"id": 1, "name": "test-project"}]).encode("utf-8")
+                self.send_response(200)
+                self.send_header("Content-Type", "application/json")
+                self.send_header("Content-Length", str(len(body)))
+                self.end_headers()
+                self.wfile.write(body)
+
+            def log_message(self, format, *args):
+                return
+
+        api_server = HTTPServer(("127.0.0.1", 0), GitLabApiHandler)
+        api_thread = threading.Thread(target=api_server.serve_forever, daemon=True)
+        api_thread.start()
+        env = os.environ.copy()
+        env["GITLAB_API_URL"] = f"http://127.0.0.1:{api_server.server_port}/api/v4"
         proc = subprocess.Popen(
-            ['python3', 'bridges/gitlab_mcp_server.py'],
+            ["python3", "bridges/gitlab_mcp_server.py"],
             stdin=subprocess.PIPE,
             stdout=subprocess.PIPE,
             stderr=subprocess.PIPE,
-            text=True
+            text=True,
+            env=env,
         )
         try:
             init_cmd = {'jsonrpc': '2.0', 'id': 1, 'method': 'initialize', 'params': {'protocolVersion': '2024-11-05', 'capabilities': {}, 'clientInfo': {'name': 'test', 'version': '1.0'}}}
@@ -219,10 +240,15 @@ class TestPhase4(unittest.TestCase):
             self.assertIsInstance(resp["result"]["structuredContent"], dict)
         finally:
             proc.kill()
+            proc.communicate()
+            api_server.shutdown()
+            api_server.server_close()
+            api_thread.join()
 
     def test_scored_bridge_detection_accuracy(self):
         """discover_mcp_config must accurately map targets to their dedicated local bridge scripts."""
         import phase4_mcp_auto_discovery as p4
+        import utils as utils_module
         
         test_mappings = [
             ("developers.google.com/knowledge/api", ("developers_google_knowledge_bridge.py", "google_developer_knowledge_bridge.py")),
@@ -238,18 +264,27 @@ class TestPhase4(unittest.TestCase):
             ("bugzilla.opensuse.org", "bugzilla_mcp_server.py")
         ]
         
-        for target, expected_script in test_mappings:
-            cfg = p4.discover_mcp_config(target)
-            args_str = " ".join(cfg.get("args", []))
-            if isinstance(expected_script, tuple):
-                self.assertTrue(any(exp in args_str for exp in expected_script), f"Target '{target}' failed to resolve to expected script '{expected_script}'. Got: {args_str}")
-            else:
-                self.assertIn(expected_script, args_str, f"Target '{target}' failed to resolve to expected script '{expected_script}'. Got: {args_str}")
+        tls_probe_result = {
+            "is_https": True,
+            "ssl_verified": True,
+            "requires_ssl_resilience": False,
+            "error": None,
+        }
+        with patch.object(p4, "probe_native_mcp_endpoint", return_value={}), patch.object(
+            utils_module, "probe_target_tls", return_value=tls_probe_result
+        ):
+            for target, expected_script in test_mappings:
+                cfg = p4.discover_mcp_config(target)
+                args_str = " ".join(cfg.get("args", []))
+                if isinstance(expected_script, tuple):
+                    self.assertTrue(any(exp in args_str for exp in expected_script), f"Target '{target}' failed to resolve to expected script '{expected_script}'. Got: {args_str}")
+                else:
+                    self.assertIn(expected_script, args_str, f"Target '{target}' failed to resolve to expected script '{expected_script}'. Got: {args_str}")
 
-        # Ensure generic domain tokens like 'suse' do not hijack unrelated targets
-        confluence_cfg = p4.discover_mcp_config("confluence.suse.com")
-        confluence_args = " ".join(confluence_cfg.get("args", []))
-        self.assertNotIn("openqa", confluence_args, "confluence.suse.com was mistakenly hijacked by openqa bridge!")
+            # Ensure generic domain tokens like 'suse' do not hijack unrelated targets
+            confluence_cfg = p4.discover_mcp_config("confluence.suse.com")
+            confluence_args = " ".join(confluence_cfg.get("args", []))
+            self.assertNotIn("openqa", confluence_args, "confluence.suse.com was mistakenly hijacked by openqa bridge!")
 
     def test_obs_universal_bridge_compilation(self):
         """bridges/obs_mcp_server.py must compile and resolve."""

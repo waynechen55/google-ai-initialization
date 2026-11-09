@@ -191,17 +191,19 @@ class TestOrchestrator(unittest.TestCase):
                 self.assertIn("server2", merged["mcpServers"])
 
 
+    @patch.dict(os.environ, {"DRY_RUN_MODE": "0"})
     def test_write_mcp_settings_tool_direct_invocation(self):
         """write_mcp_settings_tool must succeed with 4 or 5 args and never raise NameError."""
         with tempfile.TemporaryDirectory() as tmpdir:
             with patch("agent_orchestrator.WORKSPACE_ROOT", tmpdir):
-                # 4 args (instructions omitted)
-                res1 = agent_orchestrator.write_mcp_settings_tool("srv1", "echo", ["hi"], {"PORT": "8080"})
-                self.assertIn("SUCCESS", res1)
+                with patch("os.path.expanduser", side_effect=lambda path: path.replace("~", tmpdir)):
+                    # 4 args (instructions omitted)
+                    res1 = agent_orchestrator.write_mcp_settings_tool("srv1", "echo", ["hi"], {"PORT": "8080"})
+                    self.assertIn("SUCCESS", res1)
 
-                # 5 args (instructions provided)
-                res2 = agent_orchestrator.write_mcp_settings_tool("srv2", "echo", ["hello"], {}, "Run setup first")
-                self.assertIn("SUCCESS", res2)
+                    # 5 args (instructions provided)
+                    res2 = agent_orchestrator.write_mcp_settings_tool("srv2", "echo", ["hello"], {}, "Run setup first")
+                    self.assertIn("SUCCESS", res2)
 
                 mcp_file = os.path.join(tmpdir, ".mcp.json")
                 with open(mcp_file, "r") as f:
@@ -510,6 +512,8 @@ class TestOrchestrator(unittest.TestCase):
             self.assertIn("SUCCESS", res)
             self.assertIn("https://example.com/mcp", res)
 
+    @patch("os.path.expanduser", new=lambda path: path)
+    @patch.dict(os.environ, {"DRY_RUN_MODE": "0"})
     def test_write_mcp_settings_tool_http_mode(self):
         """write_mcp_settings_tool must write type='http' configs into .mcp.json."""
         import agent_orchestrator

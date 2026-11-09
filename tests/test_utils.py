@@ -72,6 +72,7 @@ class TestUtils(unittest.TestCase):
             decorated()
         self.assertEqual(mock_fn.call_count, 2)
 
+    @patch.dict(os.environ, {"DRY_RUN_MODE": "0"})
     def test_update_env_file(self):
         """Should write or update key-value pairs in a custom environment file."""
         with tempfile.NamedTemporaryFile(mode="w+", delete=False) as f:
@@ -152,40 +153,47 @@ class TestUtils(unittest.TestCase):
 
     def test_probe_target_tls_public(self):
         """probe_target_tls should identify public trusted domain."""
-        import utils
-        res = utils.probe_target_tls("https://api.github.com")
+        with patch("utils.urllib.request.urlopen"):
+            res = utils.probe_target_tls("https://api.github.com")
         self.assertIn("requires_ssl_resilience", res)
         self.assertFalse(res["requires_ssl_resilience"])
 
     def test_probe_target_tls_internal(self):
         """probe_target_tls should flag internal corporate domain needing SSL resilience."""
-        res = utils.probe_target_tls("https://build.suse.de")
+        import urllib.error
+
+        with patch(
+            "utils.urllib.request.urlopen",
+            side_effect=urllib.error.URLError("CERTIFICATE_VERIFY_FAILED"),
+        ):
+            res = utils.probe_target_tls("https://build.suse.de")
         self.assertTrue(res["is_https"])
         self.assertTrue(res["requires_ssl_resilience"])
 
     def test_make_config_portable_ssl_resilience(self):
         """make_config_portable must inject runtime-targeted SSL resilience flags for internal endpoints."""
-        python_cfg = {
-            "command": "python3",
-            "args": ["obs_mcp_server.py"],
-            "env": {"OBS_URL": "https://build.suse.de"}
-        }
-        py_res = utils.make_config_portable(python_cfg, target_hint="build.suse.de")
-        self.assertEqual(py_res["env"].get("PYTHONHTTPSVERIFY"), "0")
-        if utils.detect_system_ca_bundle():
-            self.assertIn("SSL_CERT_FILE", py_res["env"])
-            self.assertFalse(py_res["env"]["SSL_CERT_FILE"].startswith("${"))
-            
-        node_cfg = {
-            "command": "npx",
-            "args": ["-y", "@modelcontextprotocol/server-gitlab"],
-            "env": {"GITLAB_API_URL": "https://gitlab.suse.de"}
-        }
-        node_res = utils.make_config_portable(node_cfg, target_hint="gitlab.suse.de")
-        self.assertEqual(node_res["env"].get("NODE_TLS_REJECT_UNAUTHORIZED"), "0")
-        if utils.detect_system_ca_bundle():
-            self.assertIn("NODE_EXTRA_CA_CERTS", node_res["env"])
-            self.assertFalse(node_res["env"]["NODE_EXTRA_CA_CERTS"].startswith("${"))
+        with patch("utils.probe_target_tls", return_value={"requires_ssl_resilience": False}):
+            python_cfg = {
+                "command": "python3",
+                "args": ["obs_mcp_server.py"],
+                "env": {"OBS_URL": "https://build.suse.de"}
+            }
+            py_res = utils.make_config_portable(python_cfg, target_hint="build.suse.de")
+            self.assertEqual(py_res["env"].get("PYTHONHTTPSVERIFY"), "0")
+            if utils.detect_system_ca_bundle():
+                self.assertIn("SSL_CERT_FILE", py_res["env"])
+                self.assertFalse(py_res["env"]["SSL_CERT_FILE"].startswith("${"))
+
+            node_cfg = {
+                "command": "npx",
+                "args": ["-y", "@modelcontextprotocol/server-gitlab"],
+                "env": {"GITLAB_API_URL": "https://gitlab.suse.de"}
+            }
+            node_res = utils.make_config_portable(node_cfg, target_hint="gitlab.suse.de")
+            self.assertEqual(node_res["env"].get("NODE_TLS_REJECT_UNAUTHORIZED"), "0")
+            if utils.detect_system_ca_bundle():
+                self.assertIn("NODE_EXTRA_CA_CERTS", node_res["env"])
+                self.assertFalse(node_res["env"]["NODE_EXTRA_CA_CERTS"].startswith("${"))
 
     def test_fingerprint_target_service_live(self):
         """fingerprint_target_service should identify known endpoints when reachable."""
@@ -251,13 +259,15 @@ class TestUtils(unittest.TestCase):
         
         # Test 1: Config without URL for developers.google.com/knowledge/api
         cfg1 = {"command": "npx", "args": ["-y", "@houtini/google-knowledge-graph-mcp"], "env": {"API_KEY": "123"}}
-        res1 = utils.make_config_portable(cfg1, target_hint="developers.google.com/knowledge/api")
+        with patch("utils.probe_target_tls", return_value={"requires_ssl_resilience": False}):
+            res1 = utils.make_config_portable(cfg1, target_hint="developers.google.com/knowledge/api")
         self.assertIn("DEVELOPER_KNOWLEDGE_API_URL", res1["env"])
         self.assertEqual(res1["env"]["DEVELOPER_KNOWLEDGE_API_URL"], "https://developerknowledge.googleapis.com/mcp")
 
         # Test 2: Config without URL for custom remote service
         cfg2 = {"command": "npx", "args": ["-y", "some-mcp-server"], "env": {"SECRET": "xyz"}}
-        res2 = utils.make_config_portable(cfg2, target_hint="https://custom.service.corp")
+        with patch("utils.probe_target_tls", return_value={"requires_ssl_resilience": False}):
+            res2 = utils.make_config_portable(cfg2, target_hint="https://custom.service.corp")
         self.assertIn("MCP_TARGET_URL", res2["env"])
         self.assertEqual(res2["env"]["MCP_TARGET_URL"], "https://custom.service.corp")
 
@@ -328,7 +338,8 @@ class TestUtils(unittest.TestCase):
         
         cfg = {'command': 'python3', 'args': ['bridges/sd_suse_mcp_server.py'], 'env': {}}
         with patch.dict(os.environ, {'JIRA_PERSONAL_TOKEN': 'jira_secret_only', 'SD_SUSE_PAT': ''}, clear=True):
-            res = utils.make_config_portable(cfg, target_hint='https://sd.suse.com')
+            with patch("utils.probe_target_tls", return_value={"requires_ssl_resilience": False}):
+                res = utils.make_config_portable(cfg, target_hint='https://sd.suse.com')
             # Should NOT assign JIRA_PERSONAL_TOKEN to SD_SUSE_PAT
             self.assertNotEqual(res['env'].get('SD_SUSE_PAT'), 'jira_secret_only')
 
