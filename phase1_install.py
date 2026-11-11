@@ -129,6 +129,26 @@ def install_pip_packages(force_install: bool = False, break_dependencies: bool =
                 logger.error(f"❌ [FAILURE] Failed to install Python dependencies: {err}")
                 logger.error("======================================================")
                 raise err
+        finally:
+            try:
+                import importlib
+                import site
+                importlib.invalidate_caches()
+                user_site = site.getusersitepackages()
+                if user_site and os.path.exists(user_site) and user_site not in sys.path:
+                    sys.path.insert(0, user_site)
+                for sp in site.getsitepackages():
+                    if sp and os.path.exists(sp) and sp not in sys.path:
+                        sys.path.append(sp)
+                if "google" in sys.modules:
+                    google_mod = sys.modules["google"]
+                    if hasattr(google_mod, "__path__"):
+                        for p in sys.path:
+                            cand = os.path.join(p, "google")
+                            if os.path.isdir(cand) and cand not in google_mod.__path__:
+                                google_mod.__path__.append(cand)
+            except Exception:
+                pass
     else:
         logger.info("------------------------------------------------------")
         logger.info("✅ [SUCCESS] Python dependencies are already satisfied.")

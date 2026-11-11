@@ -135,6 +135,64 @@ def auto_heal_missing_python_module(module_name: str, log=None) -> bool:
             log.info(f"✅ [JIT MODULE SUCCESS] Successfully installed '{pip_package}' for module '{clean_mod}'.")
         return True
 
+def ensure_genai_sdk_available(log=None) -> tuple:
+    """
+    Guarantees that google.genai and its submodules are discoverable and importable,
+    dynamically refreshing sys.path, site packages, importlib caches, and PEP 420 namespace packages.
+    Returns (True, None) on success or (False, error_message) on failure.
+    """
+    import site
+    import importlib
+    try:
+        user_site = site.getusersitepackages()
+        if user_site and os.path.exists(user_site) and user_site not in sys.path:
+            sys.path.insert(0, user_site)
+        for sp in site.getsitepackages():
+            if sp and os.path.exists(sp) and sp not in sys.path:
+                sys.path.append(sp)
+    except Exception:
+        pass
+
+    try:
+        importlib.invalidate_caches()
+    except Exception:
+        pass
+
+    if "google" in sys.modules:
+        try:
+            google_mod = sys.modules["google"]
+            if hasattr(google_mod, "__path__"):
+                for p in sys.path:
+                    cand = os.path.join(p, "google")
+                    if os.path.isdir(cand) and cand not in google_mod.__path__:
+                        google_mod.__path__.append(cand)
+        except Exception:
+            pass
+
+    try:
+        from google import genai
+        from google.genai import types
+        from google.genai.types import HttpOptions
+        return True, None
+    except ImportError as first_err:
+        if auto_heal_missing_python_module("google-genai", log=log):
+            try:
+                importlib.invalidate_caches()
+                if "google" in sys.modules:
+                    google_mod = sys.modules["google"]
+                    if hasattr(google_mod, "__path__"):
+                        for p in sys.path:
+                            cand = os.path.join(p, "google")
+                            if os.path.isdir(cand) and cand not in google_mod.__path__:
+                                google_mod.__path__.append(cand)
+                from google import genai
+                from google.genai import types
+                from google.genai.types import HttpOptions
+                return True, None
+            except ImportError as second_err:
+                return False, str(second_err)
+        return False, str(first_err)
+
 def resolve_gcloud_bin() -> str:
     """
     Dynamically resolves the active Google Cloud SDK (gcloud) executable path.

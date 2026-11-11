@@ -544,5 +544,28 @@ class TestUtils(unittest.TestCase):
             self.assertIn("/home/test/google-ai-initialization/bridges/sample_bridge.py", cmd2)
             self.assertIn("/home/test/google-ai-initialization-repo/bridges/sample_bridge.py", cmd2)
 
+    def test_ensure_genai_sdk_available(self):
+        """ensure_genai_sdk_available must return success when google.genai is importable."""
+        import utils
+        ok, err = utils.ensure_genai_sdk_available()
+        self.assertTrue(ok)
+        self.assertIsNone(err)
+
+    def test_ensure_genai_sdk_available_handles_import_error_with_healing(self):
+        """ensure_genai_sdk_available must attempt JIT auto-healing on ImportError."""
+        import utils
+        orig_import = __import__
+        def fake_import(name, *args, **kwargs):
+            if "genai" in name:
+                raise ImportError("No module named 'google.genai'")
+            return orig_import(name, *args, **kwargs)
+
+        with patch("utils.auto_heal_missing_python_module", return_value=False) as mock_heal:
+            with patch("builtins.__import__", side_effect=fake_import):
+                ok, err = utils.ensure_genai_sdk_available()
+                self.assertFalse(ok)
+                self.assertIn("No module named 'google.genai'", str(err))
+                mock_heal.assert_called_once_with("google-genai", log=None)
+
 if __name__ == "__main__":
     unittest.main()

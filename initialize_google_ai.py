@@ -61,15 +61,21 @@ except Exception as agent_import_err:
 
 def is_agent_ready_to_run() -> tuple:
     """
-    Evaluates whether the Autonomous AI Agent has valid authentication credentials,
-    checking all supported channels:
-      1. Key-based: GEMINI_API_KEY is present and non-empty.
-      2. Keyless ADC: ~/.config/gcloud/application_default_credentials.json is present.
-      3. Service Account: GOOGLE_APPLICATION_CREDENTIALS file is present.
-      4. GCloud CLI Login: check_gcloud_auth_status() returns True.
+    Evaluates whether the Autonomous AI Agent has valid authentication credentials
+    and that the google-genai SDK is physically installed and importable:
+      1. Runtime SDK: google-genai and types can be cleanly imported.
+      2. Key-based: GEMINI_API_KEY is present and non-empty.
+      3. Keyless ADC: ~/.config/gcloud/application_default_credentials.json is present.
+      4. Service Account: GOOGLE_APPLICATION_CREDENTIALS file is present.
+      5. GCloud CLI Login: check_gcloud_auth_status() returns True.
     """
     if not agent_available:
         return False, "Agent module (agent_orchestrator.py) is not available."
+
+    from utils import ensure_genai_sdk_available
+    sdk_ok, sdk_err = ensure_genai_sdk_available(log=logger)
+    if not sdk_ok:
+        return False, f"google-genai Python SDK is not importable: {sdk_err}"
 
     if os.getenv("GEMINI_API_KEY"):
         return True, "Key-based authentication verified via GEMINI_API_KEY."

@@ -5,6 +5,7 @@ import subprocess
 import argparse
 import time
 import math
+import signal
 import re
 import shutil
 from urllib.parse import urlparse
@@ -245,13 +246,15 @@ def query_gemini_for_mcp_server(target: str) -> dict:
     Queries Gemini with Google Search Grounding to find an MCP server
     solution for the given target service/website. Supports both API keys and keyless ADC.
     """
-    try:
-        from google import genai
-        from google.genai import types
-        from google.genai.types import HttpOptions
-    except ImportError:
-        logger.warning("Google GenAI SDK is not available. Using local fallback dictionary.")
+    from utils import ensure_genai_sdk_available
+    sdk_ok, sdk_err = ensure_genai_sdk_available(log=logger)
+    if not sdk_ok:
+        logger.warning(f"Google GenAI SDK is not available ({sdk_err}). Using local fallback dictionary.")
         return {}
+
+    from google import genai
+    from google.genai import types
+    from google.genai.types import HttpOptions
 
     logger.info(f"Querying Gemini to discover MCP server solution for: {target}")
     try:
@@ -1695,6 +1698,9 @@ def validate_mcp_connection(server_name: str, config: dict, credentials: dict, l
     if config.get("env"):
         env.update(config["env"])
     env.update(credentials)
+    env["UV_NO_PROGRESS"] = "1"
+    env["PIP_NO_INPUT"] = "1"
+    env["CI"] = "1"
     
     cmd_name = config.get("command", "")
     if cmd_name and not shutil.which(cmd_name):
@@ -1714,7 +1720,8 @@ def validate_mcp_connection(server_name: str, config: dict, credentials: dict, l
             cwd=WORKSPACE_ROOT,
             env=env,
             text=True,
-            bufsize=1
+            bufsize=1,
+            start_new_session=True
         )
     except FileNotFoundError as fnf_err:
         if not _retry_attempt and ensure_runner_available(cmd_name, log=log):
@@ -1726,8 +1733,48 @@ def validate_mcp_connection(server_name: str, config: dict, credentials: dict, l
         log.error(f"Failed to spawn MCP server subprocess: {spawn_err}")
         return False
 
+    def _safe_kill_process_group():
+        pid = process.pid
+        if not isinstance(pid, int) or pid <= 0:
+            return
+        try:
+            pgid = os.getpgid(pid)
+            if pgid == pid:
+                os.killpg(pgid, signal.SIGKILL)
+            else:
+                process.kill()
+        except Exception:
+            try:
+                process.kill()
+            except Exception:
+                pass
+        try:
+            process.wait(timeout=2.0)
+        except Exception:
+            pass
+
+    def _drain_stderr():
+        try:
+            import select
+            fd = process.stderr.fileno()
+            accum = bytearray()
+            while len(accum) < 65536:
+                ready = select.select([fd], [], [], 0.2)
+                if ready[0]:
+                    chunk = os.read(fd, min(4096, 65536 - len(accum)))
+                    if not chunk:
+                        break
+                    accum.extend(chunk)
+                else:
+                    break
+            return accum.decode(errors="replace")
+        except Exception:
+            try:
+                return process.stderr.read() or ""
+            except Exception:
+                return ""
+
     try:
-        
         # Build standard MCP initialize request
         init_request = {
             "jsonrpc": "2.0",
@@ -1787,10 +1834,9 @@ def validate_mcp_connection(server_name: str, config: dict, credentials: dict, l
             log.error(f"Error during socket/pipe read: {read_err}")
             
         if not response_line:
-            process.kill()
-            process.wait()
+            _safe_kill_process_group()
             # Capture and dump stderr logs for real-time debugging (Rule 4 diagnostics)
-            stderr_logs = process.stderr.read()
+            stderr_logs = _drain_stderr()
             
             # Generalized JIT auto-healing for missing Python modules
             if not _retry_attempt and "ModuleNotFoundError" in stderr_logs:
@@ -1813,13 +1859,11 @@ def validate_mcp_connection(server_name: str, config: dict, credentials: dict, l
             res_json = json.loads(response_line)
             if "error" in res_json:
                 log.warning(f"Server returned initialization error: {res_json['error']}")
-                process.kill()
-                process.wait()
+                _safe_kill_process_group()
                 return False
         except Exception as json_err:
             log.warning(f"Failed to parse server response as JSON: {json_err}")
-            process.kill()
-            process.wait()
+            _safe_kill_process_group()
             return False
             
         # Send 'initialized' notification (required by protocol)
@@ -1901,15 +1945,13 @@ def validate_mcp_connection(server_name: str, config: dict, credentials: dict, l
                     from utils import perform_level3_functional_smoke_test
                     dry_ok, dry_msg = perform_level3_functional_smoke_test(process, tools_list)
                     if not dry_ok:
-                        process.kill()
-                        process.wait()
+                        _safe_kill_process_group()
                         log.error(f"❌ DEGRADED: Connection successful, but Level 3 Functional Smoke Test failed!\n{dry_msg}")
                         return False
                 except Exception as e:
                     log.warning(f"Smoke test skipped: {e}")
                     
-                process.kill()
-                process.wait()
+                _safe_kill_process_group()
 
                 # Strict Schema Validation Check!
                 for tool in tools_list:
@@ -1943,6 +1985,8 @@ def validate_mcp_connection(server_name: str, config: dict, credentials: dict, l
     except Exception as spawn_err:
         log.error(f"Failed to spawn MCP server subprocess: {spawn_err}")
         return False
+    finally:
+        _safe_kill_process_group()
 
 def run_mcp_discovery(target: str, log=None) -> bool:
     """Main discovery and validation flow with self-healing interactive retry loops and Best/Exhaustive support."""

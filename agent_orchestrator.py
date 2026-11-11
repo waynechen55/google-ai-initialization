@@ -6,6 +6,8 @@ import sys
 import json
 import subprocess
 import time
+import math
+import signal
 import threading
 import re
 import shutil
@@ -866,11 +868,22 @@ def verify_mcp_connection_tool(command: str = "", args: list = None, env: dict =
     logger.info(f"[Agent Tool] Testing MCP connection for command: {command}...")
     full_env = os.environ.copy()
     full_env.update(env)
+    full_env["UV_NO_PROGRESS"] = "1"
+    full_env["PIP_NO_INPUT"] = "1"
+    full_env["CI"] = "1"
     
     # Pre-check runner availability
     if command and not shutil.which(command):
         ensure_runner_available(command, log=logger)
         
+    try:
+        timeout_scale = float(os.getenv("PROCESS_TIMEOUT_SCALE", "1.0"))
+    except ValueError:
+        timeout_scale = 1.0
+    if not math.isfinite(timeout_scale) or timeout_scale < 1:
+        timeout_scale = 1.0
+    runner_timeout = int((45 if command in ("uvx", "npx", "uv") else 15) * timeout_scale)
+
     try:
         process = subprocess.Popen(
             [command] + args,
@@ -880,7 +893,8 @@ def verify_mcp_connection_tool(command: str = "", args: list = None, env: dict =
             cwd=WORKSPACE_ROOT,
             env=full_env,
             text=True,
-            bufsize=1
+            bufsize=1,
+            start_new_session=True
         )
     except FileNotFoundError as fnf_err:
         if not _retry_attempt and ensure_runner_available(command, log=logger):
@@ -889,6 +903,47 @@ def verify_mcp_connection_tool(command: str = "", args: list = None, env: dict =
         return f"FAILED: Command runner '{command}' not found on host machine: {fnf_err}"
     except Exception as spawn_err:
         return f"FAILED: Could not spawn server command '{command}': {spawn_err}"
+
+    def _safe_kill_process_group():
+        pid = process.pid
+        if not isinstance(pid, int) or pid <= 0:
+            return
+        try:
+            pgid = os.getpgid(pid)
+            if pgid == pid:
+                os.killpg(pgid, signal.SIGKILL)
+            else:
+                process.kill()
+        except Exception:
+            try:
+                process.kill()
+            except Exception:
+                pass
+        try:
+            process.wait(timeout=2.0)
+        except Exception:
+            pass
+
+    def _drain_stderr():
+        try:
+            import select
+            fd = process.stderr.fileno()
+            accum = bytearray()
+            while len(accum) < 65536:
+                ready = select.select([fd], [], [], 0.2)
+                if ready[0]:
+                    chunk = os.read(fd, min(4096, 65536 - len(accum)))
+                    if not chunk:
+                        break
+                    accum.extend(chunk)
+                else:
+                    break
+            return accum.decode(errors="replace")
+        except Exception:
+            try:
+                return process.stderr.read() or ""
+            except Exception:
+                return ""
 
     try:
         # 1. Send MCP initialize request
@@ -913,10 +968,9 @@ def verify_mcp_connection_tool(command: str = "", args: list = None, env: dict =
         response_line = ""
         
         try:
-            timeout = 15
             start_time = time.time()
             # Read line-by-line to gracefully skip non-JSON startup banners
-            while time.time() - start_time < timeout:
+            while time.time() - start_time < runner_timeout:
                 ready = select.select([process.stdout], [], [], 1.0)
                 if ready[0]:
                     line = process.stdout.readline()
@@ -933,16 +987,15 @@ def verify_mcp_connection_tool(command: str = "", args: list = None, env: dict =
                             pass
                     logger.info(f"   [Agent Tool: Skipping raw non-JSON log] {line_stripped[:100]}")
                 else:
-                    if time.time() - start_time >= timeout:
+                    if time.time() - start_time >= runner_timeout:
                         break
         except Exception as read_err:
             logger.error(f"[Agent Tool] Error during pipe read: {read_err}")
             
         if not response_line:
-            process.kill()
-            process.wait()
-            # Capture and report stderr logs for real-time troubleshooting
-            stderr_logs = process.stderr.read()
+            _safe_kill_process_group()
+            # Capture and report stderr logs safely for real-time troubleshooting
+            stderr_logs = _drain_stderr()
             
             # Check for ModuleNotFoundError to attempt JIT recovery
             if not _retry_attempt and "ModuleNotFoundError" in stderr_logs:
@@ -975,12 +1028,10 @@ def verify_mcp_connection_tool(command: str = "", args: list = None, env: dict =
         try:
             res_json = json.loads(response_line)
             if "error" in res_json:
-                process.kill()
-                process.wait()
+                _safe_kill_process_group()
                 return f"FAILED: Server returned initialization error: {res_json['error']}"
         except Exception as e:
-            process.kill()
-            process.wait()
+            _safe_kill_process_group()
             return f"FAILED: Could not parse initialization JSON response: {e}. Raw: {response_line}"
             
         # 2. Send 'initialized' notification (required by protocol)
@@ -1027,18 +1078,16 @@ def verify_mcp_connection_tool(command: str = "", args: list = None, env: dict =
                 continue
         
         if not tools_json:
-            process.kill()
-            process.wait()
+            _safe_kill_process_group()
             err_msg = "FAILED: Server successfully initialized, but hung/crashed when asked to list tools (tools/list).\n"
-            stderr_logs = process.stderr.read() if process.stderr else ""
+            stderr_logs = _drain_stderr()
             if "expected record, received array" in str(stderr_logs).lower() or "inputschema" in str(stderr_logs).lower():
                 err_msg += "DIAGNOSIS: Schema Validation Error detected in server stderr. Ensure all tool inputSchemas are records, not bare arrays."
             return err_msg
             
         try:
             if "error" in tools_json:
-                process.kill()
-                process.wait()
+                _safe_kill_process_group()
                 return f"FAILED: Server initialized, but tools/list returned an error: {json.dumps(tools_json['error'])}"
             elif "result" in tools_json and "tools" in tools_json["result"]:
                 tools_list = tools_json["result"]["tools"]
@@ -1048,14 +1097,12 @@ def verify_mcp_connection_tool(command: str = "", args: list = None, env: dict =
                     import utils
                     dry_ok, dry_msg = utils.perform_level3_functional_smoke_test(process, tools_list)
                     if not dry_ok:
-                        process.kill()
-                        process.wait()
+                        _safe_kill_process_group()
                         return f"DEGRADED: Connection successful, but Level 3 Functional Smoke Test failed!\n{dry_msg}\n\nTools available: {len(tools_list)}"
                 except Exception as e:
                     logger.warning(f"Smoke test skipped: {e}")
                     
-                process.kill()
-                process.wait()
+                _safe_kill_process_group()
                 if not tools_list:
                     cmd_str = str(command or "").lower() + " " + " ".join(str(a) for a in (args or []))
                     env_dict = env if isinstance(env, dict) else {}
@@ -1107,6 +1154,8 @@ def verify_mcp_connection_tool(command: str = "", args: list = None, env: dict =
             
     except Exception as e:
         return f"ERROR: Failed to spawn or verify MCP server: {e}"
+    finally:
+        _safe_kill_process_group()
 
 def report_final_verdict_tool(verdict_text: str) -> str:
     """
@@ -1242,13 +1291,15 @@ def run_agentic_initialization(project_id: str, target_mcp_service: str, log=Non
     if not verify_target_dns(target_mcp_service):
         logger.warning(f"⚠️  [DNS WARNING] Pre-flight DNS resolution for target domain '{target_mcp_service}' was slow or unresolvable via local DNS. Proceeding with agent discovery anyway...")
     
-    try:
-        from google import genai
-        from google.genai import types
-        from google.genai.types import HttpOptions
-    except ImportError:
-        logger.error("google-genai Python SDK is not installed.")
+    from utils import ensure_genai_sdk_available
+    sdk_ok, sdk_err = ensure_genai_sdk_available(log=logger)
+    if not sdk_ok:
+        logger.error(f"google-genai Python SDK could not be imported: {sdk_err}")
         return False
+
+    from google import genai
+    from google.genai import types
+    from google.genai.types import HttpOptions
 
     api_key = os.getenv("GEMINI_API_KEY")
     client = None
