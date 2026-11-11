@@ -57,6 +57,7 @@ Thumbs.db
 
 # Scratch and temporary directories / files
 temp/
+patches/
 service_enablement
 text
 1

@@ -579,5 +579,13 @@ class TestOrchestrator(unittest.TestCase):
                         bin_path = resolve_gcloud_bin()
                         self.assertEqual(bin_path, "/root/google-cloud-sdk/bin/gcloud")
 
+    def test_504_gateway_timeout_detected_as_network_infrastructure_outage(self):
+        """is_network_infrastructure_outage must recognize 504 DEADLINE_EXCEEDED gateway errors."""
+        import agent_orchestrator
+        err_504 = Exception("504 DEADLINE_EXCEEDED. {'error': {'code': 504, 'message': 'Deadline expired before operation could complete.', 'status': 'DEADLINE_EXCEEDED'}}")
+        self.assertTrue(agent_orchestrator.is_network_infrastructure_outage(err_504))
+        err_gateway = Exception("Gateway Timeout occurred while connecting to Vertex AI")
+        self.assertTrue(agent_orchestrator.is_network_infrastructure_outage(err_gateway))
+
 if __name__ == "__main__":
     unittest.main()

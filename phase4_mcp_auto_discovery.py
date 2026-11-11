@@ -4,6 +4,7 @@ import json
 import subprocess
 import argparse
 import time
+import math
 import re
 import shutil
 from urllib.parse import urlparse
@@ -458,12 +459,20 @@ def probe_native_mcp_endpoint(target: str, log=None) -> dict:
     
     log.info(f"🔎 [PROBING] Checking remote target '{base_url}' for natively hosted MCP endpoints...")
     
+    try:
+        timeout_scale = float(os.getenv("PROCESS_TIMEOUT_SCALE", "1.0"))
+    except ValueError:
+        timeout_scale = 1.0
+    if not math.isfinite(timeout_scale) or timeout_scale < 1:
+        timeout_scale = 1.0
+    probe_timeout = max(2.5, 2.5 * timeout_scale)
+
     def check_path(url_to_test):
         for h in candidate_header_sets:
             # Test 1: GET (for SSE streams)
             try:
                 req = urllib.request.Request(url_to_test, headers=h, method="GET")
-                with urllib.request.urlopen(req, context=ctx, timeout=1.5) as response:
+                with urllib.request.urlopen(req, context=ctx, timeout=probe_timeout) as response:
                     resp_headers = response.info()
                     content_type = resp_headers.get("Content-Type", "").lower()
                     if "html" in content_type:
@@ -487,7 +496,7 @@ def probe_native_mcp_endpoint(target: str, log=None) -> dict:
             # Test 2: POST (for Streamable HTTP / JSON-RPC endpoints that reject GET)
             try:
                 req = urllib.request.Request(url_to_test, data=init_bytes, headers=h, method="POST")
-                with urllib.request.urlopen(req, context=ctx, timeout=1.5) as response:
+                with urllib.request.urlopen(req, context=ctx, timeout=probe_timeout) as response:
                     resp_headers = response.info()
                     content_type = resp_headers.get("Content-Type", "").lower()
                     if "html" in content_type:

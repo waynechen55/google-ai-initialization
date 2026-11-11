@@ -1202,7 +1202,10 @@ def is_network_infrastructure_outage(err) -> bool:
         "connection reset by peer",
         "remotedisconnected",
         "connection refused",
-        "network is unreachable"
+        "network is unreachable",
+        "deadline_exceeded",
+        "504",
+        "gateway timeout"
     ]
     return any(k in err_str for k in net_triggers)
 
@@ -1420,11 +1423,19 @@ def run_agentic_initialization(project_id: str, target_mcp_service: str, log=Non
     else:
         logger.info("ℹ️  [VERTEX AI MODE] Operating in strict function calling mode (Google Search tool omitted to satisfy Vertex AI tool exclusivity).")
 
-    def _build_agent_config(m_name: str, sys_inst: str, t_tools: list, m_turns: int):
+    def _build_agent_config(m_name: str, sys_inst: str, t_tools: list, m_turns: int, mode=None):
         thinking_cfg = None
         if "2.5" in str(m_name) or "thinking" in str(m_name).lower():
             try:
                 thinking_cfg = types.ThinkingConfig(thinking_budget=0)
+            except Exception:
+                pass
+        tool_cfg = None
+        if mode is not None:
+            try:
+                tool_cfg = types.ToolConfig(
+                    function_calling_config=types.FunctionCallingConfig(mode=mode)
+                )
             except Exception:
                 pass
         return types.GenerateContentConfig(
@@ -1432,6 +1443,7 @@ def run_agentic_initialization(project_id: str, target_mcp_service: str, log=Non
             tools=t_tools,
             temperature=0.1,  # Lower temperature means high conformance
             thinking_config=thinking_cfg,
+            tool_config=tool_cfg,
             automatic_function_calling=types.AutomaticFunctionCallingConfig(
                 maximum_remote_calls=m_turns
             )
@@ -1539,7 +1551,7 @@ def run_agentic_initialization(project_id: str, target_mcp_service: str, log=Non
             # Multi-Turn Conversational Follow-Up: If the agent returned a conversational plan without executing tools,
             # send follow-up turns urging it to immediately invoke write_mcp_settings_tool and verify_mcp_connection_tool.
             followup_turns = 0
-            max_followup_turns = 3
+            max_followup_turns = max(0, max_turns - 1)
             while followup_turns < max_followup_turns and not is_target_configured_in_mcp(target_mcp_service):
                 if "FINAL_VERDICT_LOGGED" in agent_text:
                     break
@@ -1551,17 +1563,13 @@ def run_agentic_initialization(project_id: str, target_mcp_service: str, log=Non
                     "then invoke 'verify_mcp_connection_tool' to verify it, and finally invoke 'report_final_verdict_tool'. "
                     "Execute the function calls now!"
                 )
-                forced_config = None
-                try:
-                    forced_config = types.GenerateContentConfig(
-                        tool_config=types.ToolConfig(
-                            function_calling_config=types.FunctionCallingConfig(
-                                mode=types.FunctionCallingConfigMode.ANY
-                            )
-                        )
-                    )
-                except Exception:
-                    pass
+                forced_config = _build_agent_config(
+                    current_active_model,
+                    system_instruction,
+                    agent_tools,
+                    m_turns=max(1, max_turns - followup_turns),
+                    mode=types.FunctionCallingConfigMode.ANY
+                )
                 if forced_config is not None:
                     try:
                         response = chat.send_message(followup_prompt, config=forced_config)
@@ -1615,7 +1623,10 @@ def run_agentic_initialization(project_id: str, target_mcp_service: str, log=Non
                 if finish_reason and finish_reason not in ("STOP", "UNKNOWN", "FinishReason.STOP"):
                     agent_text = f"❌ [ERROR] Agent execution halted unexpectedly by the SDK (Finish Reason: {finish_reason})."
                 else:
-                    agent_text = "⚠️ [WARNING] The agent completed its tool executions but reached its maximum turn budget before it could output a final verdict."
+                    agent_text = (
+                        f"⚠️ [WARNING] The agent completed turn {followup_turns + 1}/{max_turns} without persisting "
+                        f"target '{target_mcp_service}' to .mcp.json (Finish Reason: {finish_reason})."
+                    )
                 
             logger.info("\n==============================================")
             logger.info("  AUTONOMOUS AGENT RUN COMPLETED")
