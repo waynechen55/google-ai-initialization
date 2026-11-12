@@ -543,15 +543,19 @@ CANONICAL_BRIDGES_B64 = {
 
 bridge_io_lock = threading.Lock()
 
-def ensure_bridges_directory_intact(log=None) -> None:
+def ensure_bridges_directory_intact(log=None, bridge_dir: str = None) -> None:
     """
     Self-Healing Bridge Synchronizer.
     Guarantees that the 'bridges/' directory in WORKSPACE_ROOT exists and contains
     all foundational bridge scripts. If missing or damaged, automatically recovers
     them from sibling folders or repository root.
     """
-    dest_log = log or logging.getLogger("google_ai_initialization")
-    bridge_dir = os.path.join(WORKSPACE_ROOT, "bridges")
+    if bridge_dir is None and isinstance(log, str) and (os.path.isdir(log) or os.path.sep in log):
+        bridge_dir = log
+        log = None
+    dest_log = logging.getLogger(log) if isinstance(log, str) else log
+    dest_log = dest_log or logging.getLogger("google_ai_initialization")
+    bridge_dir = bridge_dir or os.path.join(WORKSPACE_ROOT, "bridges")
     os.makedirs(bridge_dir, exist_ok=True)
 
     with bridge_io_lock:
@@ -622,41 +626,38 @@ def ensure_bridges_directory_intact(log=None) -> None:
             except Exception:
                 pass
 
-        # Synthesize canonical OBS bridge wrapper if missing
-        obs_path = os.path.join(bridge_dir, "obs_mcp_server.py")
-        if not os.path.exists(obs_path):
-            try:
-                with open(obs_path, "w", encoding="utf-8") as f:
-                    f.write('''#!/usr/bin/env python3
-import sys, os
-current_dir = os.path.dirname(os.path.abspath(__file__))
-if current_dir not in sys.path:
-    sys.path.insert(0, current_dir)
-import build_opensuse_mcp
-if __name__ == "__main__":
-    build_opensuse_mcp.main()
-''')
-                os.chmod(obs_path, 0o755)
-                dest_log.info(f"📦 [BRIDGE SYNTHESIS] Synthesized canonical OBS bridge 'obs_mcp_server.py' into {bridge_dir}")
-            except Exception:
-                pass
-
         # Indestructible Embedded Restoration directly from internal CANONICAL_BRIDGES_B64
         import base64
         for b_name, b_b64 in CANONICAL_BRIDGES_B64.items():
             target_b_path = os.path.join(bridge_dir, b_name)
             target_root_path = os.path.join(WORKSPACE_ROOT, b_name)
+            needs_restore_bridge = not os.path.exists(target_b_path) or os.path.getsize(target_b_path) == 0
+            needs_restore_root = not os.path.exists(target_root_path) or os.path.getsize(target_root_path) == 0
+            if b_name == "obs_mcp_server.py":
+                if not needs_restore_bridge:
+                    try:
+                        with open(target_b_path, "r", encoding="utf-8") as existing_f:
+                            needs_restore_bridge = "parent_dir" not in existing_f.read()
+                    except (OSError, UnicodeError):
+                        needs_restore_bridge = True
+                if not needs_restore_root:
+                    try:
+                        with open(target_root_path, "r", encoding="utf-8") as existing_f:
+                            needs_restore_root = "parent_dir" not in existing_f.read()
+                    except (OSError, UnicodeError):
+                        needs_restore_root = True
             try:
                 b_code = base64.b64decode(b_b64).decode("utf-8", errors="ignore")
-                if not os.path.exists(target_b_path) or os.path.getsize(target_b_path) == 0:
+                if needs_restore_bridge:
                     with open(target_b_path, "w", encoding="utf-8") as bf:
                         bf.write(b_code)
                     os.chmod(target_b_path, 0o755)
                     dest_log.info(f"📦 [EMBEDDED RESTORATION] Restored canonical bridge '{b_name}' into {bridge_dir}")
-                if not os.path.exists(target_root_path) or os.path.getsize(target_root_path) == 0:
+                if needs_restore_root:
                     with open(target_root_path, "w", encoding="utf-8") as rf:
                         rf.write(b_code)
                     os.chmod(target_root_path, 0o755)
+                    dest_log.info(f"📦 [EMBEDDED RESTORATION] Symmetrically synchronized canonical bridge '{b_name}' into {WORKSPACE_ROOT}")
             except Exception as b_err:
                 dest_log.debug(f"Failed to write canonical bridge {b_name}: {b_err}")
 
@@ -1544,6 +1545,7 @@ def make_config_portable(config: dict, target_hint: str = None) -> dict:
 
         bash_cmd = (
             f'PROJECT_ROOT="${{WORKSPACE_ROOT:-${{GEMINI_PROJECT_ROOT:-.}}}}"; '
+            f'export PYTHONPATH="$PROJECT_ROOT:$PROJECT_ROOT/bridges:${{PYTHONPATH:-}}"; '
             f'VENV_BIN="${{PYTHON_VENV_BIN:-../../python_venv/bin}}"; '
             f'if [ -f "$PROJECT_ROOT/bridges/{script_name}" ]; then SCRIPT="$PROJECT_ROOT/bridges/{script_name}"; '
             f'elif [ -f "$PROJECT_ROOT/{script_name}" ]; then SCRIPT="$PROJECT_ROOT/{script_name}"; '

@@ -258,7 +258,7 @@ class TestPhase4(unittest.TestCase):
             ("build.suse.de", ("build_suse_de_mcp_server.py", "build_suse_de_mcp.py")),
             ("build.opensuse.org", ("build_opensuse_org_mcp_server.py", "build_opensuse_mcp.py", "build_opensuse_org_mcp.py")),
             ("gitlab.suse.de", "gitlab_mcp_server.py"),
-            ("openqa.suse.de", ("openqa_suse_de_mcp_server.py", "openqa_suse_de_mcp_bridge.py")),
+            ("openqa.suse.de", ("openqa_suse_de_mcp_server.py", "openqa_suse_de_mcp_bridge.py", "mcp_sse_bridge_openqa_suse_de.py")),
             ("progress.opensuse.org", "redmine_mcp_server.py"),
             ("bugzilla.suse.com", "bugzilla_mcp_server.py"),
             ("bugzilla.opensuse.org", "bugzilla_mcp_server.py")

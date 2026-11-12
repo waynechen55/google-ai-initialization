@@ -535,14 +535,39 @@ class TestUtils(unittest.TestCase):
         with patch("utils.WORKSPACE_ROOT", "/home/test/google-ai-initialization-repo"):
             res = utils.make_config_portable(cfg)
             cmd = res["args"][1]
+            self.assertIn('export PYTHONPATH="$PROJECT_ROOT:$PROJECT_ROOT/bridges:${PYTHONPATH:-}";', cmd)
             self.assertIn("/home/test/google-ai-initialization-repo/bridges/sample_bridge.py", cmd)
             self.assertIn("/home/test/google-ai-initialization/bridges/sample_bridge.py", cmd)
 
         with patch("utils.WORKSPACE_ROOT", "/home/test/google-ai-initialization"):
             res2 = utils.make_config_portable(cfg)
             cmd2 = res2["args"][1]
+            self.assertIn('export PYTHONPATH="$PROJECT_ROOT:$PROJECT_ROOT/bridges:${PYTHONPATH:-}";', cmd2)
             self.assertIn("/home/test/google-ai-initialization/bridges/sample_bridge.py", cmd2)
             self.assertIn("/home/test/google-ai-initialization-repo/bridges/sample_bridge.py", cmd2)
+
+    def test_ensure_bridges_directory_repairs_truncated_obs_bridge_in_both_directories(self):
+        """ensure_bridges_directory_intact replaces truncated OBS wrappers in both locations."""
+        with tempfile.TemporaryDirectory() as tmpdir:
+            bridges_dir = os.path.join(tmpdir, "bridges")
+            os.makedirs(bridges_dir)
+            for path in (
+                os.path.join(bridges_dir, "obs_mcp_server.py"),
+                os.path.join(tmpdir, "obs_mcp_server.py"),
+            ):
+                with open(path, "w", encoding="utf-8") as f:
+                    f.write("import build_opensuse_mcp\n")
+            with patch("utils.WORKSPACE_ROOT", tmpdir):
+                utils.ensure_bridges_directory_intact(bridge_dir=bridges_dir)
+            for path in (
+                os.path.join(bridges_dir, "obs_mcp_server.py"),
+                os.path.join(tmpdir, "obs_mcp_server.py"),
+            ):
+                self.assertTrue(os.path.isfile(path))
+                with open(path, "r", encoding="utf-8") as f:
+                    content = f.read()
+                self.assertIn("parent_dir", content)
+                self.assertIn("build_opensuse_mcp", content)
 
     def test_ensure_genai_sdk_available(self):
         """ensure_genai_sdk_available must return success when google.genai is importable."""
