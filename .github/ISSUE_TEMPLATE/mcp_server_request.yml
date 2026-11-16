@@ -1,0 +1,24 @@
+name: 🔌 Enterprise MCP Server Request
+description: Request built-in discovery and bridge support for a new enterprise or open-source service
+labels: ["mcp-server"]
+body:
+  - type: input
+    id: server_domain
+    attributes:
+      label: Target Service Domain / URL
+      description: e.g. monitoring.company.com, api.internal-ci.net
+      placeholder: https://service.example.com
+    validations:
+      required: true
+  - type: textarea
+    id: api_details
+    attributes:
+      label: API Protocol & Capabilities
+      description: Is it REST, GraphQL, Native MCP, SSE, or OpenAPI? What tools should it expose?
+    validations:
+      required: true
+  - type: textarea
+    id: auth_method
+    attributes:
+      label: Authentication Requirements
+      description: API Key, Personal Access Token (PAT), OAuth, Basic Auth, or unauthenticated?

@@ -1,0 +1,41 @@
+name: 🐛 Bug Report
+description: Report an issue or unexpected behavior in the initialization pipeline
+labels: ["bug"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for taking the time to report an issue! Please ensure that you do NOT include sensitive API keys, PAT tokens, or passwords in your logs.
+  - type: input
+    id: environment
+    attributes:
+      label: Operating System & Environment
+      description: e.g. openSUSE Tumbleweed, Ubuntu 24.04, SLE 15 SP5
+      placeholder: Linux x86_64
+    validations:
+      required: true
+  - type: dropdown
+    id: phase
+    attributes:
+      label: Affected Phase / Component
+      options:
+        - "Phase 1: Environment Setup & Enterprise CA Trust"
+        - "Phase 2: Google Cloud & ADC Authentication"
+        - "Phase 3: GCP Project Config & API Services"
+        - "Phase 4: Autonomous MCP Discovery & Handshake"
+        - "CLI / General Orchestrator"
+    validations:
+      required: true
+  - type: textarea
+    id: description
+    attributes:
+      label: Bug Description
+      description: A clear and concise description of what went wrong.
+    validations:
+      required: true
+  - type: textarea
+    id: logs
+    attributes:
+      label: Relevant Log Output
+      description: Paste relevant log lines from google_ai_initialization.log (ENSURE ALL SECRETS ARE REDACTED).
+      render: text
